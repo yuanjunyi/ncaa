@@ -3,8 +3,9 @@ import pandas as pd
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.utils import shuffle
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import log_loss
 
 def compute_regular_season_statistics_team(df_regular):
     df_regular['ScoreDiff'] = df_regular.WScore - df_regular.LScore
@@ -115,24 +116,21 @@ if __name__ == '__main__':
                           df_team_conference,
                           df_regular_season_statistics_team,
                           df_regular_season_statistics_conference)
-    # df = df[df.Season < 2014]
     df_features = df[['SeedDiff', 'TeamPctDiff', 'TeamMarginDiff', 'ConfPctDiff', 'ConfMarginDiff']]
     N = len(df_features)
     X = pd.concat([df_features, -df_features])
     y = np.vstack([np.ones([N, 1]), np.zeros([N, 1])]).reshape(-1)
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3)
+
     scalar = StandardScaler()
-    X_new = scalar.fit_transform(X)
-    X_train, y_train = shuffle(X_new, y)
-    X_train, y_train = shuffle(X, y)
+    X_train_scaled = scalar.fit_transform(X_train)
+    X_test_scaled = scalar.transform(X_test)
 
-    logreg = LogisticRegression()
-    params = {'C': np.logspace(start=-5, stop=3, num=9)}
-    clf = GridSearchCV(logreg, params, scoring='neg_log_loss', refit=True)
-    clf.fit(X_train, y_train)
-    print('Best log_loss: {:.4}, with best C: {}'.format(clf.best_score_, clf.best_params_['C']))
-    print()
+    clf = LogisticRegression()
+    clf.fit(X_train_scaled, y_train)
+    print('log_loss', log_loss(y_test, clf.predict_proba(X_test_scaled)[:, 1]))
 
-    svc = SVC(probability=True)
-    clf = GridSearchCV(svc, {'kernel': ['linear', 'poly', 'rbf', 'sigmoid']}, scoring='neg_log_loss', refit=True)
-    clf.fit(X_train, y_train)
-    print('Best log_loss: {:.4}, with best kernel: {}'.format(clf.best_score_, clf.best_params_['kernel']))
+    clf = SVC(kernel='poly', degree=3, probability=True)
+    clf.fit(X_train_scaled, y_train)
+    print('log_loss', log_loss(y_test, clf.predict_proba(X_test_scaled)[:, 1]))
