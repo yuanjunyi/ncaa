@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from sklearn.svm import SVC
+from sklearn.svm import SVC, LinearSVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.utils import shuffle
 from sklearn.model_selection import GridSearchCV, train_test_split
@@ -71,8 +71,7 @@ def compute_features(df_ncaa_tourney,
                         .merge(df_seeds.rename(columns={'TeamID':'LTeamID', 'SeedInt':'LSeedInt'}),
                                how='inner',
                                on=['Season', 'LTeamID'])
-    df['SeedDiff'] = df.WSeedInt - df.LSeedInt
-    df = df[['Season', 'WTeamID', 'LTeamID', 'SeedDiff']]
+    df = df[['Season', 'WTeamID', 'LTeamID', 'WSeedInt', 'LSeedInt']]
 
     df = df.merge(df_regular_season_statistics_team.rename(columns={'TeamID':'WTeamID', 'Pct':'WTeamPct', 'Margin':'WTeamMargin'}),
                   how='inner',
@@ -80,9 +79,7 @@ def compute_features(df_ncaa_tourney,
            .merge(df_regular_season_statistics_team.rename(columns={'TeamID':'LTeamID', 'Pct':'LTeamPct', 'Margin':'LTeamMargin'}),
                   how='inner',
                   on=['Season', 'LTeamID'])
-    df['TeamPctDiff'] = df.WTeamPct - df.LTeamPct
-    df['TeamMarginDiff'] = df.WTeamMargin - df.LTeamMargin
-    df = df[['Season', 'WTeamID', 'LTeamID', 'SeedDiff', 'TeamPctDiff', 'TeamMarginDiff']]
+    df = df[['Season', 'WTeamID', 'LTeamID', 'WSeedInt', 'LSeedInt', 'WTeamPct', 'LTeamPct', 'WTeamMargin', 'LTeamMargin']]
     
     df = df.merge(df_team_conference.rename(columns={'TeamID':'WTeamID', 'ConfAbbrev':'WTeamConfAbbrev'}),
                   how='inner',
@@ -96,9 +93,7 @@ def compute_features(df_ncaa_tourney,
            .merge(df_regular_season_statistics_conference.rename(columns={'ConfAbbrev':'LTeamConfAbbrev', 'Pct':'LConfPct', 'Margin':'LConfMargin'}),
                   how='inner',
                   on=['Season', 'LTeamConfAbbrev'])
-    df['ConfPctDiff'] = df.WConfPct - df.LConfPct
-    df['ConfMarginDiff'] = df.WConfMargin - df.LConfMargin
-    df = df[['Season', 'WTeamID', 'LTeamID', 'SeedDiff', 'TeamPctDiff', 'TeamMarginDiff', 'ConfPctDiff', 'ConfMarginDiff']]
+    df = df[['Season', 'WTeamID', 'LTeamID', 'WSeedInt', 'LSeedInt', 'WTeamPct', 'LTeamPct', 'WTeamMargin', 'LTeamMargin', 'WConfPct', 'LConfPct', 'WConfMargin', 'LConfMargin']]
     return df
 
 
@@ -116,12 +111,14 @@ if __name__ == '__main__':
                           df_team_conference,
                           df_regular_season_statistics_team,
                           df_regular_season_statistics_conference)
-    df_features = df[['SeedDiff', 'TeamPctDiff', 'TeamMarginDiff', 'ConfPctDiff', 'ConfMarginDiff']]
-    N = len(df_features)
-    X = pd.concat([df_features, -df_features])
-    y = np.vstack([np.ones([N, 1]), np.zeros([N, 1])]).reshape(-1)
+    df_features = df[['WSeedInt', 'LSeedInt', 'WTeamPct', 'LTeamPct', 'WTeamMargin', 'LTeamMargin', 'WConfPct', 'LConfPct', 'WConfMargin', 'LConfMargin']]
+    df_features_reverse = df[['LSeedInt', 'WSeedInt', 'LTeamPct', 'WTeamPct', 'LTeamMargin', 'WTeamMargin', 'LConfPct', 'WConfPct', 'LConfMargin', 'WConfMargin']]
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3)
+    M = len(df_features)
+    X = np.vstack([df_features.values, df_features_reverse.values])
+    y = np.hstack([np.ones(M), np.zeros(M)])
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
     scalar = StandardScaler()
     X_train_scaled = scalar.fit_transform(X_train)
@@ -131,6 +128,9 @@ if __name__ == '__main__':
     clf.fit(X_train_scaled, y_train)
     print('log_loss', log_loss(y_test, clf.predict_proba(X_test_scaled)[:, 1]))
 
-    clf = SVC(kernel='poly', degree=3, probability=True)
-    clf.fit(X_train_scaled, y_train)
-    print('log_loss', log_loss(y_test, clf.predict_proba(X_test_scaled)[:, 1]))
+    gamma_range = np.logspace(-6, -2, 5)
+    print(gamma_range)
+    for g in gamma_range:
+        clf = SVC(kernel='rbf', C=1, gamma=g, probability=True)
+        clf.fit(X_train_scaled, y_train)
+        print('C=1, gamma={}, log_loss={}'.format(g, log_loss(y_test, clf.predict_proba(X_test_scaled)[:, 1])))
