@@ -124,13 +124,14 @@ if __name__ == '__main__':
     X_train_scaled = scalar.fit_transform(X_train)
     X_test_scaled = scalar.transform(X_test)
 
-    clf = LogisticRegression()
-    clf.fit(X_train_scaled, y_train)
-    print('log_loss', log_loss(y_test, clf.predict_proba(X_test_scaled)[:, 1]))
-
-    gamma_range = np.logspace(-6, -2, 5)
-    print(gamma_range)
-    for g in gamma_range:
-        clf = SVC(kernel='rbf', C=1, gamma=g, probability=True)
+    for C in np.logspace(-4, 0, 5):
+        clf = LogisticRegression(C=C)
         clf.fit(X_train_scaled, y_train)
-        print('C=1, gamma={}, log_loss={}'.format(g, log_loss(y_test, clf.predict_proba(X_test_scaled)[:, 1])))
+        print('C={}, log_loss={}'.format(C, log_loss(y_test, clf.predict_proba(X_test_scaled)[:, 1])))
+
+    for C in np.logspace(-4, 0, 5):
+        print()
+        for gamma in np.logspace(-4, 2, 7):
+            clf = SVC(kernel='rbf', C=C, gamma=gamma, probability=True)
+            clf.fit(X_train_scaled, y_train)
+            print('C={}, gamma={}, log_loss={}'.format(C, gamma, log_loss(y_test, clf.predict_proba(X_test_scaled)[:, 1])))
